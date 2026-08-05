@@ -21,8 +21,10 @@ a **Cavuno API** credential in n8n:
 - **API Base URL** — your board's API base, ending in `/api/v1`
   (for example `https://your-board.com/api/v1`).
 - **API Key** — the `cavuno_live_...` key. Grant it only the scopes you need:
-  - Actions: the matching family scopes (`jobs.write`, `companies.write`,
-    `candidates.read`, `marketing_permissions.manage`, ...).
+  - Actions: the matching family scopes (`jobs.read`, `jobs.manage`,
+    `jobs.publish`, `companies.read`, `companies.manage`, `candidates.read`,
+    `candidates.manage`, `marketing_permissions.read`,
+    `marketing_permissions.manage`).
   - Trigger: `webhooks.read` and `webhooks.manage`, plus the read scope of
     each event family you subscribe to (for example `jobs.read` for job
     events).
@@ -52,6 +54,10 @@ Available events: `job.created`, `job.updated`, `job.deleted`,
 `company.created`, `company.updated`, `company.deleted`,
 `candidate.created`, `candidate.updated`, `candidate.deleted`,
 `marketing_permission.granted`, `marketing_permission.withdrawn`.
+
+Cavuno only delivers to publicly reachable HTTPS URLs. On n8n Cloud this
+just works; on self-hosted n8n, set the `WEBHOOK_URL` environment variable
+to your instance's public HTTPS address before activating the workflow.
 
 Every delivery is verified before your workflow runs, following the
 [Standard Webhooks](https://www.standardwebhooks.com/) specification: the

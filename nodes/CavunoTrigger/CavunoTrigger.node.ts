@@ -33,6 +33,28 @@ interface CavunoWebhookStaticData {
 	secret?: string;
 }
 
+/**
+ * Pull the HTTP status and Cavuno's structured `{ error: { message } }` body
+ * out of a failed request, across the error shapes n8n's request helpers
+ * produce (NodeApiError with httpCode, axios-style response.data, normalized
+ * response.body, or either nested under cause).
+ */
+function describeRequestError(error: unknown): { status?: number; message?: string } {
+	const err = error as {
+		httpCode?: string;
+		statusCode?: number;
+		response?: { status?: number; body?: unknown; data?: unknown };
+		cause?: { response?: { status?: number; body?: unknown; data?: unknown } };
+	};
+	const response = err.response ?? err.cause?.response;
+	const status = err.httpCode ? Number(err.httpCode) : (err.statusCode ?? response?.status);
+	const body = (response?.body ?? response?.data) as
+		| { error?: { message?: string } }
+		| undefined;
+	const message = typeof body?.error?.message === 'string' ? body.error.message : undefined;
+	return { status: Number.isFinite(status) ? status : undefined, message };
+}
+
 async function cavunoApiRequest(
 	this: IHookFunctions,
 	method: 'GET' | 'POST' | 'DELETE',
@@ -168,17 +190,29 @@ export class CavunoTrigger implements INodeType {
 						event_types: events,
 					});
 				} catch (error) {
-					const statusCode = (error as { httpCode?: string }).httpCode;
-					if (statusCode === '402') {
+					const { status, message } = describeRequestError(error);
+					if (status === 402) {
 						throw new NodeOperationError(
 							this.getNode(),
 							'Webhooks need a paid Cavuno plan. Upgrade the board, then activate this workflow again.',
 						);
 					}
-					if (statusCode === '403') {
+					if (status === 403) {
 						throw new NodeOperationError(
 							this.getNode(),
 							'The API key is missing a required scope. It needs webhooks.read and webhooks.manage plus the read scope of each selected event family (e.g. candidates.read for candidate events).',
+						);
+					}
+					if (message) {
+						throw new NodeOperationError(
+							this.getNode(),
+							`Cavuno rejected the webhook subscription: ${message}`,
+							/https|public address/i.test(message)
+								? {
+										description:
+											'Cavuno only delivers to publicly reachable HTTPS URLs. On self-hosted n8n, set the WEBHOOK_URL environment variable to your instance\'s public HTTPS address.',
+									}
+								: undefined,
 						);
 					}
 					throw new NodeApiError(this.getNode(), error as JsonObject);
