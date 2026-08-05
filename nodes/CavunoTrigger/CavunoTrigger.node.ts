@@ -162,6 +162,14 @@ export class CavunoTrigger implements INodeType {
 					if (endpoint.url === this.getNodeWebhookUrl('default')) {
 						return true;
 					}
+					// The n8n instance URL changed since registration. Retire the
+					// stale endpoint instead of orphaning it; a fresh one is created
+					// for the current URL right after.
+					await cavunoApiRequest.call(
+						this,
+						'DELETE',
+						`/webhook-endpoints/${staticData.webhookId}`,
+					);
 				} catch (error) {
 					this.logger.debug(
 						'Cavuno webhook endpoint lookup failed; it will be recreated on activation',
