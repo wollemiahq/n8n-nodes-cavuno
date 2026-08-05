@@ -103,7 +103,6 @@ function verifySignature(
 	return false;
 }
 
-// eslint-disable-next-line @n8n/community-nodes/node-usable-as-tool -- webhook trigger nodes cannot be used as AI tools
 export class CavunoTrigger implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Cavuno Trigger',
@@ -116,6 +115,9 @@ export class CavunoTrigger implements INodeType {
 		defaults: {
 			name: 'Cavuno Trigger',
 		},
+		// The published-package scanner requires this on every node class; the
+		// editor never offers trigger nodes as AI tools, so it has no effect.
+		usableAsTool: true,
 		inputs: [],
 		outputs: [NodeConnectionTypes.Main],
 		credentials: [
