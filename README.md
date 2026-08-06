@@ -40,9 +40,9 @@ Webhooks and API access are available on paid Cavuno plans.
 - **Candidate** — Get, Get Many, Delete
 - **Marketing Permission** — Get Many (exact-match email lookup), Withdraw
 
-Withdrawing marketing consent is idempotent. Granting consent is
-person-authoritative and only possible on board-user surfaces — never through
-this node.
+Withdrawing marketing consent is safe to run more than once. Consent can only
+be given by the person themselves on your board, so this node cannot grant
+it.
 
 ## Cavuno Trigger
 
@@ -66,8 +66,8 @@ and HMAC-SHA256 `webhook-signature` headers against the endpoint's signing
 secret. Unverified requests are rejected and never reach your workflow.
 
 Deliveries are retried by Cavuno until acknowledged, so your workflow may
-occasionally receive the same event twice. Deduplicate on the top-level `id`
-field if your workflow is not idempotent. Each event also carries
+occasionally receive the same event twice. If running twice would cause a
+problem, deduplicate on the top-level `id` field. Each event also carries
 `data.object.revision` — ignore events whose revision is not newer than the
 last one you applied for that resource.
 

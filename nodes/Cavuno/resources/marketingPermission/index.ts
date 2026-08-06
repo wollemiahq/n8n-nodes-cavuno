@@ -42,7 +42,7 @@ export const marketingPermissionDescription: INodeProperties[] = [
 				value: 'withdraw',
 				action: 'Withdraw a marketing permission',
 				description:
-					'Withdraw marketing consent for a contact. Withdrawal is idempotent; granting consent is only possible on board-user surfaces, never through this API.',
+					"Remove marketing consent for a contact. Running it more than once is safe. Consent can only be given by the person themselves on your board, so this operation can't grant it.",
 				routing: {
 					request: {
 						method: 'POST',

@@ -1,38 +1,117 @@
-import type { INodePropertyOptions, INodeProperties } from 'n8n-workflow';
+import type {
+	IExecuteSingleFunctions,
+	IHttpRequestOptions,
+	INodePropertyOptions,
+	INodeProperties,
+} from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 
 /**
- * Optional job fields shared by Create (additionalFields) and Update
- * (updateFields). Each option routes itself into the request body, so the
- * collection needs no collection-level routing.
+ * Operations that take no input still need a JSON body: the API validates
+ * `{}` against a strict schema and rejects a zero-length body outright.
+ */
+export async function sendEmptyJsonBody(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	// Serialized explicitly: an empty object is dropped before it reaches the
+	// wire, and the API rejects a zero-length body outright.
+	requestOptions.body = '{}';
+	requestOptions.json = false;
+	requestOptions.headers = { ...requestOptions.headers, 'Content-Type': 'application/json' };
+	return requestOptions;
+}
+
+/** Coerce a date picker string, a Date, or a Luxon DateTime to epoch ms. */
+function toEpochMs(value: unknown): number | null {
+	if (value instanceof Date) {
+		return Number.isNaN(value.getTime()) ? null : value.getTime();
+	}
+	const maybeLuxon = value as { toMillis?: () => number; isValid?: boolean };
+	if (typeof maybeLuxon?.toMillis === 'function') {
+		if (maybeLuxon.isValid === false) return null;
+		const millis = maybeLuxon.toMillis();
+		return Number.isFinite(millis) ? millis : null;
+	}
+	if (typeof value === 'string' && value !== '') {
+		const parsed = Date.parse(value);
+		return Number.isNaN(parsed) ? null : parsed;
+	}
+	return null;
+}
+
+/**
+ * Normalizes the job body before it is sent:
+ * - Create requires exactly one of `companyId` | `company`; a company name is
+ *   sent as the inline `{ name }` object the API expects.
+ * - `expiresAt` from the date picker becomes a Unix epoch in milliseconds.
+ * - Empty optional values are dropped instead of being sent as "".
+ */
+export async function normalizeJobBody(
+	this: IExecuteSingleFunctions,
+	requestOptions: IHttpRequestOptions,
+): Promise<IHttpRequestOptions> {
+	const body = (requestOptions.body ?? {}) as Record<string, unknown>;
+	for (const key of Object.keys(body)) {
+		if (body[key] === '' || body[key] === undefined) delete body[key];
+	}
+	if (typeof body.company === 'string') {
+		body.company = { name: body.company };
+	}
+	// The API rejects a remote policy without the work-authorization scope
+	// it applies to, so the toggle expands into "anywhere". Timezones
+	// auto-derive from permits on create; an update has to state them.
+	if (body.remote !== undefined) {
+		const isRemote = body.remote === true;
+		delete body.remote;
+		if (isRemote) {
+			body.remoteOption = 'remote';
+			body.remotePermits = [{ type: 'worldwide', value: 'worldwide' }];
+			if (this.getNodeParameter('operation') === 'update') {
+				body.remoteTimezones = [{ type: 'all', value: 'all' }];
+			}
+		}
+	}
+	// The date picker yields an ISO string, but an expression like
+	// {{ $now.plus({ days: 30 }) }} yields a Date or a Luxon DateTime — all
+	// three have to reach the API as epoch milliseconds. `null` passes
+	// through untouched: on an update it is how the API clears an expiry.
+	if (
+		body.expiresAt !== undefined &&
+		body.expiresAt !== null &&
+		typeof body.expiresAt !== 'number'
+	) {
+		const parsed = toEpochMs(body.expiresAt);
+		if (parsed === null) {
+			throw new NodeOperationError(this.getNode(), 'Expires At is not a valid date');
+		}
+		body.expiresAt = parsed;
+	}
+	if (this.getNodeParameter('operation') === 'create') {
+		if (body.companyId && body.company) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Fill in either Company ID or Company Name, not both',
+			);
+		}
+		if (!body.companyId && !body.company) {
+			throw new NodeOperationError(
+				this.getNode(),
+				'Every job needs a company. Fill in Company ID, or enter a Company Name to create one.',
+			);
+		}
+	}
+	requestOptions.body = body;
+	return requestOptions;
+}
+
+/**
+ * Optional job fields accepted by both Create and Update. Company and Status
+ * are deliberately NOT here: the inline company and initial status only exist
+ * on Create, and status changes after that go through the Publish and Expire
+ * operations.
  */
 export const jobOptionalFields: INodeProperties[] = [
-	{
-		displayName: 'Company ID',
-		name: 'companyId',
-		type: 'string',
-		default: '',
-		description: 'ID of the company this job belongs to',
-		routing: {
-			send: {
-				type: 'body',
-				property: 'companyId',
-			},
-		},
-	},
-	{
-		displayName: 'Company Name',
-		name: 'company',
-		type: 'string',
-		default: '',
-		description:
-			'Company name to attach the job to (matched or created board-side). Use Company ID instead when you have it.',
-		routing: {
-			send: {
-				type: 'body',
-				property: 'company',
-			},
-		},
-	},
 	{
 		displayName: 'Employment Type',
 		name: 'employmentType',
@@ -82,23 +161,26 @@ export const jobOptionalFields: INodeProperties[] = [
 		},
 	},
 	{
-		displayName: 'Remote Option',
-		name: 'remoteOption',
-		type: 'options',
-		options: [
-			{ name: 'Hybrid', value: 'hybrid' },
-			{ name: 'On-Site', value: 'on_site' },
-			{ name: 'Remote', value: 'remote' },
-		],
-		default: 'on_site',
-		description: 'The remote policy of the job',
+		displayName: 'Fully Remote',
+		name: 'remote',
+		type: 'boolean',
+		default: false,
+		description:
+			'Whether to publish this as a fully remote role open to candidates anywhere. On-site and hybrid roles need office locations, which this node does not set — configure those on your board.',
+		// Routed into the body only so normalizeJobBody can read it; that
+		// preSend replaces it with the remoteOption/remotePermits pair the
+		// API expects, so `remote` itself never reaches the wire.
 		routing: {
 			send: {
 				type: 'body',
-				property: 'remoteOption',
+				property: 'remote',
 			},
 		},
 	},
+	// Only the "anywhere" remote case is offered. The API pairs a remote
+	// policy with data this node does not model — office locations for
+	// on-site and hybrid roles — so those stay out; normalizeJobBody
+	// expands the toggle above into the permits the API requires.
 	{
 		displayName: 'Salary Currency',
 		name: 'salaryCurrency',
@@ -182,24 +264,29 @@ export const jobOptionalFields: INodeProperties[] = [
 			},
 		},
 	},
-	{
-		displayName: 'Status',
-		name: 'status',
-		type: 'options',
-		options: [
-			{ name: 'Draft', value: 'draft' },
-			{ name: 'Published', value: 'published' },
-		],
-		default: 'published',
-		description: 'Whether the job is created as a draft or published immediately',
-		routing: {
-			send: {
-				type: 'body',
-				property: 'status',
-			},
+];
+
+/**
+ * Create-only: the initial status. After creation, use the Publish and
+ * Expire operations — the API rejects status on updates.
+ */
+export const jobCreateStatusField: INodeProperties = {
+	displayName: 'Status',
+	name: 'status',
+	type: 'options',
+	options: [
+		{ name: 'Draft', value: 'draft' },
+		{ name: 'Published', value: 'published' },
+	],
+	default: 'published',
+	description: 'Whether the job is created as a draft or published immediately',
+	routing: {
+		send: {
+			type: 'body',
+			property: 'status',
 		},
 	},
-];
+};
 
 export const jobStatusFilterOptions: INodePropertyOptions[] = [
 	{ name: 'Archived', value: 'archived' },

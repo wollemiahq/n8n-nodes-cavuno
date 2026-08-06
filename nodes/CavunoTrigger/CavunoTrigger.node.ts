@@ -39,7 +39,11 @@ interface CavunoWebhookStaticData {
  * produce (NodeApiError with httpCode, axios-style response.data, normalized
  * response.body, or either nested under cause).
  */
-function describeRequestError(error: unknown): { status?: number; message?: string } {
+function describeRequestError(error: unknown): {
+	status?: number;
+	code?: string;
+	message?: string;
+} {
 	const err = error as {
 		httpCode?: string;
 		statusCode?: number;
@@ -49,10 +53,11 @@ function describeRequestError(error: unknown): { status?: number; message?: stri
 	const response = err.response ?? err.cause?.response;
 	const status = err.httpCode ? Number(err.httpCode) : (err.statusCode ?? response?.status);
 	const body = (response?.body ?? response?.data) as
-		| { error?: { message?: string } }
+		| { error?: { code?: string; message?: string } }
 		| undefined;
 	const message = typeof body?.error?.message === 'string' ? body.error.message : undefined;
-	return { status: Number.isFinite(status) ? status : undefined, message };
+	const code = typeof body?.error?.code === 'string' ? body.error.code : undefined;
+	return { status: Number.isFinite(status) ? status : undefined, code, message };
 }
 
 async function cavunoApiRequest(
@@ -155,18 +160,54 @@ export class CavunoTrigger implements INodeType {
 				if (!staticData.webhookId || !staticData.secret) {
 					return false;
 				}
+				let endpoint;
 				try {
-					const endpoint = await cavunoApiRequest.call(
+					endpoint = await cavunoApiRequest.call(
 						this,
 						'GET',
 						`/webhook-endpoints/${staticData.webhookId}`,
 					);
-					if (endpoint.url === this.getNodeWebhookUrl('default')) {
-						return true;
+				} catch (error) {
+					const { status } = describeRequestError(error);
+					if (status === 404 || status === 410) {
+						// Endpoint removed board-side; recreate it.
+						delete staticData.webhookId;
+						delete staticData.secret;
+						return false;
 					}
-					// The n8n instance URL changed since registration. Retire the
-					// stale endpoint instead of orphaning it; a fresh one is created
-					// for the current URL right after.
+					// A transient failure must NOT drop the stored endpoint —
+					// recreating here would register a duplicate that keeps
+					// delivering while its secret is lost. Fail activation loudly.
+					throw new NodeApiError(this.getNode(), error as JsonObject);
+				}
+				const selectedEvents = [...(this.getNodeParameter('events') as string[])].sort();
+				const registeredEvents = Array.isArray(endpoint.event_types)
+					? [...(endpoint.event_types as string[])].sort()
+					: [];
+				const urlMatches = endpoint.url === this.getNodeWebhookUrl('default');
+				const eventsMatch =
+					registeredEvents.length === selectedEvents.length &&
+					registeredEvents.every((event, i) => event === selectedEvents[i]);
+				// Cavuno pauses an endpoint after repeated delivery failures — for
+				// example while this instance was unreachable. A paused endpoint
+				// still reads back fine, so without this check reactivating the
+				// workflow would leave it silently receiving nothing.
+				const isDelivering = endpoint.status !== 'paused';
+				if (urlMatches && eventsMatch && isDelivering) {
+					return true;
+				}
+				// Belt and braces: a test-event session normally starts with empty
+				// static data and returns above, so this should be unreachable. If
+				// n8n ever runs this with the live endpoint and a temporary test
+				// URL, registering a second endpoint is recoverable — retiring the
+				// live one is not.
+				if (this.getMode() === 'manual') {
+					return false;
+				}
+				// The instance URL or the selected events changed, or delivery is
+				// paused. Retire the stale endpoint instead of orphaning it; a fresh
+				// one is created right after.
+				try {
 					await cavunoApiRequest.call(
 						this,
 						'DELETE',
@@ -174,7 +215,7 @@ export class CavunoTrigger implements INodeType {
 					);
 				} catch (error) {
 					this.logger.debug(
-						'Cavuno webhook endpoint lookup failed; it will be recreated on activation',
+						'Retiring the outdated Cavuno webhook endpoint failed; it may already be removed',
 						{ error },
 					);
 				}
@@ -200,8 +241,8 @@ export class CavunoTrigger implements INodeType {
 						event_types: events,
 					});
 				} catch (error) {
-					const { status, message } = describeRequestError(error);
-					if (status === 402) {
+					const { status, code, message } = describeRequestError(error);
+					if (status === 402 || code === 'plan_upgrade_required') {
 						throw new NodeOperationError(
 							this.getNode(),
 							'Webhooks need a paid Cavuno plan. Upgrade the board, then activate this workflow again.',
@@ -217,7 +258,7 @@ export class CavunoTrigger implements INodeType {
 						throw new NodeOperationError(
 							this.getNode(),
 							`Cavuno rejected the webhook subscription: ${message}`,
-							/https|public address/i.test(message)
+							code === 'webhooks_invalid_url'
 								? {
 										description:
 											'Cavuno only delivers to publicly reachable HTTPS URLs. On self-hosted n8n, set the WEBHOOK_URL environment variable to your instance\'s public HTTPS address.',

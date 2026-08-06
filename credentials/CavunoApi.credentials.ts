@@ -37,7 +37,7 @@ export class CavunoApi implements ICredentialType {
 			required: true,
 			default: '',
 			description:
-				'A Cavuno API key (starts with cavuno_live_). Create one in your Cavuno dashboard under Settings → API. The Cavuno trigger additionally needs the webhooks.read and webhooks.manage scopes plus the read scope of each event family you subscribe to.',
+				'A Cavuno API key (starts with cavuno_live_). Create one in your Cavuno dashboard under Settings → API. Include the jobs.read scope — the connection test uses it. The Cavuno trigger additionally needs the webhooks.read and webhooks.manage scopes plus the read scope of each event family you subscribe to.',
 		},
 	];
 

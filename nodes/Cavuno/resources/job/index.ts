@@ -1,6 +1,7 @@
 import type { INodeProperties } from 'n8n-workflow';
 import { jobCreateDescription } from './create';
 import { jobGetAllDescription } from './getAll';
+import { normalizeJobBody, sendEmptyJsonBody } from './shared';
 import { jobUpdateDescription } from './update';
 
 const showOnlyForJobs = {
@@ -26,6 +27,9 @@ export const jobDescription: INodeProperties[] = [
 					request: {
 						method: 'POST',
 						url: '/jobs',
+					},
+					send: {
+						preSend: [normalizeJobBody],
 					},
 				},
 			},
@@ -97,6 +101,9 @@ export const jobDescription: INodeProperties[] = [
 						method: 'POST',
 						url: '=/jobs/{{$parameter.jobId}}/publish',
 					},
+					send: {
+						preSend: [sendEmptyJsonBody],
+					},
 				},
 			},
 			{
@@ -108,6 +115,9 @@ export const jobDescription: INodeProperties[] = [
 					request: {
 						method: 'PATCH',
 						url: '=/jobs/{{$parameter.jobId}}',
+					},
+					send: {
+						preSend: [normalizeJobBody],
 					},
 				},
 			},

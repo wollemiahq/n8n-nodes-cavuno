@@ -6,6 +6,9 @@ const showOnlyForJobUpdate = {
 	resource: ['job'],
 };
 
+// Status and the inline company are create-only in the API, so Update offers
+// neither: status changes go through the Publish and Expire operations, and
+// re-parenting uses Company ID.
 export const jobUpdateDescription: INodeProperties[] = [
 	{
 		displayName: 'Update Fields',
@@ -56,6 +59,19 @@ export const jobUpdateDescription: INodeProperties[] = [
 					send: {
 						type: 'body',
 						property: 'applicationUrl',
+					},
+				},
+			},
+			{
+				displayName: 'Company ID',
+				name: 'companyId',
+				type: 'string',
+				default: '',
+				description: 'The ID of an existing company to move this job to',
+				routing: {
+					send: {
+						type: 'body',
+						property: 'companyId',
 					},
 				},
 			},

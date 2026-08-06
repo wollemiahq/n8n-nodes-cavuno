@@ -1,5 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
-import { jobOptionalFields } from './shared';
+import { jobCreateStatusField, jobOptionalFields } from './shared';
 
 const showOnlyForJobCreate = {
 	operation: ['create'],
@@ -62,6 +62,40 @@ export const jobCreateDescription: INodeProperties[] = [
 		},
 	},
 	{
+		displayName: 'Company ID',
+		name: 'companyId',
+		type: 'string',
+		default: '',
+		displayOptions: {
+			show: showOnlyForJobCreate,
+		},
+		description:
+			'The ID of an existing company on your board. Every job needs a company: fill in this field or Company Name (not both).',
+		routing: {
+			send: {
+				type: 'body',
+				property: 'companyId',
+			},
+		},
+	},
+	{
+		displayName: 'Company Name',
+		name: 'company',
+		type: 'string',
+		default: '',
+		displayOptions: {
+			show: showOnlyForJobCreate,
+		},
+		description:
+			'A company name to attach the job to. An existing company with this name is reused, otherwise one is created. Leave empty when you use Company ID.',
+		routing: {
+			send: {
+				type: 'body',
+				property: 'company',
+			},
+		},
+	},
+	{
 		displayName: 'Additional Fields',
 		name: 'additionalFields',
 		type: 'collection',
@@ -70,6 +104,6 @@ export const jobCreateDescription: INodeProperties[] = [
 		displayOptions: {
 			show: showOnlyForJobCreate,
 		},
-		options: jobOptionalFields,
+		options: [...jobOptionalFields, jobCreateStatusField],
 	},
 ];
