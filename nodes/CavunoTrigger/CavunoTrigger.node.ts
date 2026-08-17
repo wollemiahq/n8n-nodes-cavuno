@@ -261,7 +261,7 @@ export class CavunoTrigger implements INodeType {
 							code === 'webhooks_invalid_url'
 								? {
 										description:
-											'Cavuno only delivers to publicly reachable HTTPS URLs. On self-hosted n8n, set the WEBHOOK_URL environment variable to your instance\'s public HTTPS address.',
+											'Cavuno only delivers to publicly reachable HTTPS URLs. On current self-hosted n8n, set the N8N_WEBHOOK_URL environment variable to your instance\'s public HTTPS address. Older n8n versions use WEBHOOK_URL.',
 									}
 								: undefined,
 						);

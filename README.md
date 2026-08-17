@@ -9,13 +9,34 @@ workflow automation platform.
 
 ## Installation
 
-Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/)
-in the n8n community nodes documentation. The package name is
-`n8n-nodes-cavuno`.
+### n8n Cloud
+
+Cavuno is a verified community node on n8n Cloud. An instance owner or admin
+can install it directly from a workflow:
+
+1. Open the canvas and select **+** to open the nodes panel.
+2. Search for **Cavuno**.
+3. Under **More from the community**, select **Cavuno**, then select
+   **Install**.
+
+If Cavuno does not appear, enable **Verified Community Nodes** in the
+[n8n Cloud Admin Panel](https://app.n8n.cloud/dashboard), then restart the
+instance if needed. Once installed, every member of the instance can use the
+node.
+
+### Self-hosted n8n
+
+Install Cavuno from the canvas when verified community nodes are enabled, or
+open **Settings → Community nodes → Install a community node** and enter the
+package name `n8n-nodes-cavuno`.
+
+See n8n's [community node installation and management guide](https://docs.n8n.io/integrations/community-nodes/installation-and-management/)
+for other installation methods and configuration options.
 
 ## Credentials
 
-Create an API key in your Cavuno dashboard under **Settings → API**, then add
+Create an API key in your Cavuno dashboard under
+**Settings → Developer → API keys**, then add
 a **Cavuno API** credential in n8n:
 
 - **API Base URL** — your board's API base, ending in `/api/v1`
@@ -47,8 +68,9 @@ it.
 ## Cavuno Trigger
 
 The **Cavuno Trigger** node subscribes to your board's outbound webhooks.
-When the workflow is activated it registers a webhook endpoint with the
-selected events; deactivating removes the endpoint again.
+When the workflow is published it registers a webhook endpoint with the
+selected events; unpublishing removes the endpoint again. Older n8n versions
+call these actions **Activate** and **Deactivate**.
 
 Available events: `job.created`, `job.updated`, `job.deleted`,
 `company.created`, `company.updated`, `company.deleted`,
@@ -56,8 +78,9 @@ Available events: `job.created`, `job.updated`, `job.deleted`,
 `marketing_permission.granted`, `marketing_permission.withdrawn`.
 
 Cavuno only delivers to publicly reachable HTTPS URLs. On n8n Cloud this
-just works; on self-hosted n8n, set the `WEBHOOK_URL` environment variable
-to your instance's public HTTPS address before activating the workflow.
+just works; on current self-hosted n8n, set the `N8N_WEBHOOK_URL` environment
+variable to your instance's public HTTPS address before publishing the
+workflow. Older n8n versions use `WEBHOOK_URL`.
 
 Every delivery is verified before your workflow runs, following the
 [Standard Webhooks](https://www.standardwebhooks.com/) specification: the
