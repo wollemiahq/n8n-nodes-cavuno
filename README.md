@@ -39,8 +39,6 @@ Create an API key in your Cavuno dashboard under
 **Settings → Developer → API keys**, then add
 a **Cavuno API** credential in n8n:
 
-- **API Base URL** — your board's API base, ending in `/api/v1`
-  (for example `https://your-board.com/api/v1`).
 - **API Key** — the `cavuno_live_...` key. Grant it only the scopes you need:
   - Actions: the matching family scopes (`jobs.read`, `jobs.manage`,
     `jobs.publish`, `companies.read`, `companies.manage`, `candidates.read`,
@@ -50,20 +48,34 @@ a **Cavuno API** credential in n8n:
     each event family you subscribe to (for example `jobs.read` for job
     events).
 
-Webhooks and API access are available on paid Cavuno plans.
+**Company → Find** needs only `companies.read` for ID or name lookups. Website
+lookup uses Cavuno's domain matcher and also needs `companies.manage`, as does
+**Find or Create**.
+
+Webhooks and API access are available on paid Cavuno plans. The node always
+uses Cavuno's canonical Operator API at `https://api.cavuno.com/v1`; there is
+no board-specific base URL to enter.
 
 ## Operations
 
 **Cavuno** node:
 
 - **Job** — Create, Get, Get Many, Update, Delete, Publish, Expire
-- **Company** — Create, Find or Create, Get, Get Many, Update, Delete
+- **Company** — Create, Find, Find or Create, Get, Get Many, Update, Delete
 - **Candidate** — Get, Get Many, Delete
 - **Marketing Permission** — Get Many (exact-match email lookup), Withdraw
 
 Withdrawing marketing consent is safe to run more than once. Consent can only
 be given by the person themselves on your board, so this node cannot grant
 it.
+
+Company fields are searchable selectors. Choose **From List** to find a
+company by name, or **By ID** to paste an ID or use an expression. **Company →
+Find** accepts a company ID, website, or exact name without creating a record.
+
+Action errors show Cavuno's own explanation. A `402` response also tells you
+to upgrade the board's plan; `401` identifies an invalid, expired, or revoked
+API key.
 
 ## Cavuno Trigger
 
@@ -93,6 +105,11 @@ occasionally receive the same event twice. If running twice would cause a
 problem, deduplicate on the top-level `id` field. Each event also carries
 `data.object.revision` — ignore events whose revision is not newer than the
 last one you applied for that resource.
+
+The trigger output keeps the original Cavuno envelope (`occurred_at`,
+`board_id`, and `data`) for existing workflows and also adds mapping-friendly
+fields: `occurredAt`, `boardId`, `changedFields`, and the resource snapshot as
+`resource`. The top-level `object: "event"` discriminator is unchanged.
 
 ## Compatibility
 

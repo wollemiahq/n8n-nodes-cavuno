@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { companyIdSelector } from '../company/selector';
 import { jobOptionalFields } from './shared';
 
 const showOnlyForJobUpdate = {
@@ -62,19 +63,7 @@ export const jobUpdateDescription: INodeProperties[] = [
 					},
 				},
 			},
-			{
-				displayName: 'Company ID',
-				name: 'companyId',
-				type: 'string',
-				default: '',
-				description: 'The ID of an existing company to move this job to',
-				routing: {
-					send: {
-						type: 'body',
-						property: 'companyId',
-					},
-				},
-			},
+			companyIdSelector('The existing company to move this job to', { sendTo: 'body' }),
 			...jobOptionalFields,
 		],
 	},

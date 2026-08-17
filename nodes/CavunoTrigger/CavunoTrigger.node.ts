@@ -10,6 +10,7 @@ import {
 	type IWebhookResponseData,
 	type JsonObject,
 } from 'n8n-workflow';
+import { CAVUNO_API_BASE_URL } from '../../shared/api';
 
 const EVENT_TYPE_OPTIONS = [
 	{ name: 'Candidate Created', value: 'candidate.created' },
@@ -66,11 +67,9 @@ async function cavunoApiRequest(
 	endpoint: string,
 	body?: JsonObject,
 ) {
-	const credentials = await this.getCredentials('cavunoApi');
-	const baseUrl = String(credentials.baseUrl).replace(/\/+$/, '');
 	return await this.helpers.httpRequestWithAuthentication.call(this, 'cavunoApi', {
 		method,
-		url: `${baseUrl}${endpoint}`,
+		url: `${CAVUNO_API_BASE_URL}${endpoint}`,
 		headers: {
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
@@ -349,9 +348,23 @@ export class CavunoTrigger implements INodeType {
 		}
 
 		res.status(202).json({ received: true });
+		const eventData =
+			event.data && typeof event.data === 'object' && !Array.isArray(event.data)
+				? (event.data as JsonObject)
+				: {};
+		const workflowEvent: JsonObject = {
+			...event,
+			occurredAt: event.occurred_at,
+			boardId: event.board_id,
+			changedFields: eventData.changed_fields ?? [],
+			resource:
+				eventData.object && typeof eventData.object === 'object' && !Array.isArray(eventData.object)
+					? eventData.object
+					: {},
+		};
 		return {
 			noWebhookResponse: true,
-			workflowData: [this.helpers.returnJsonArray(event)],
+			workflowData: [this.helpers.returnJsonArray(workflowEvent)],
 		};
 	}
 }

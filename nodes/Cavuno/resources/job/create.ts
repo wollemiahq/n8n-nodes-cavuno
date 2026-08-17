@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { companyIdSelector } from '../company/selector';
 import { jobCreateStatusField, jobOptionalFields } from './shared';
 
 const showOnlyForJobCreate = {
@@ -61,23 +62,10 @@ export const jobCreateDescription: INodeProperties[] = [
 			},
 		},
 	},
-	{
-		displayName: 'Company ID',
-		name: 'companyId',
-		type: 'string',
-		default: '',
-		displayOptions: {
-			show: showOnlyForJobCreate,
-		},
-		description:
-			'The ID of an existing company on your board. Every job needs a company: fill in this field or Company Name (not both).',
-		routing: {
-			send: {
-				type: 'body',
-				property: 'companyId',
-			},
-		},
-	},
+	companyIdSelector(
+		'An existing company on your board. Every job needs a company: choose one here or enter a Company Name (not both).',
+		{ displayOptions: { show: showOnlyForJobCreate }, sendTo: 'body' },
+	),
 	{
 		displayName: 'Company Name',
 		name: 'company',

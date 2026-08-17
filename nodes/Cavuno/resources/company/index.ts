@@ -1,6 +1,12 @@
 import type { INodeProperties } from 'n8n-workflow';
 import { companyCreateDescription } from './create';
+import {
+	companyFindDescription,
+	normalizeCompanyFindBody,
+	normalizeCompanyFindOutput,
+} from './find';
 import { companyGetAllDescription } from './getAll';
+import { companyIdSelector } from './selector';
 import { companyUpdateDescription } from './update';
 
 const showOnlyForCompanies = {
@@ -22,7 +28,7 @@ export const companyDescription: INodeProperties[] = [
 				value: 'create',
 				action: 'Create a company',
 				description: 'Create a new company',
-				routing: {
+					routing: {
 					request: {
 						method: 'POST',
 						url: '/companies',
@@ -40,6 +46,24 @@ export const companyDescription: INodeProperties[] = [
 						url: '=/companies/{{$parameter.companyId}}',
 					},
 				},
+			},
+			{
+				name: 'Find',
+				value: 'find',
+				action: 'Find a company',
+				description: 'Find a company by ID, website, or exact name without creating it',
+				routing: {
+					request: {
+						method: 'POST',
+						url: '/companies/find-or-create',
+					},
+						send: {
+							preSend: [normalizeCompanyFindBody],
+						},
+						output: {
+							postReceive: [normalizeCompanyFindOutput],
+						},
+					},
 			},
 			{
 				name: 'Find or Create',
@@ -102,21 +126,17 @@ export const companyDescription: INodeProperties[] = [
 		],
 		default: 'getAll',
 	},
-	{
-		displayName: 'Company ID',
-		name: 'companyId',
-		type: 'string',
+	companyIdSelector('The company', {
 		required: true,
-		default: '',
 		displayOptions: {
 			show: {
 				...showOnlyForCompanies,
 				operation: ['get', 'update', 'delete'],
 			},
 		},
-		description: 'The ID of the company',
-	},
+	}),
 	...companyCreateDescription,
+	...companyFindDescription,
 	...companyUpdateDescription,
 	...companyGetAllDescription,
 ];
