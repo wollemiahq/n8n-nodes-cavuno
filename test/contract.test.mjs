@@ -55,6 +55,14 @@ test('action requests use the canonical API and expose company lookup', () => {
 	assert.equal(companyRecordSelector.routing, undefined);
 	assert.equal(companyRecordSelector.required, true);
 	assert.equal(jobCreateSelector.routing.send.property, 'companyId');
+	assert.equal(jobCreateSelector.routing.send.type, 'body');
+	const jobFilters = node.description.properties.find(
+		(property) =>
+			property.name === 'filters' && property.displayOptions?.show?.operation?.includes('getAll'),
+	);
+	const jobCompanyFilter = jobFilters.options.find((property) => property.name === 'companyId');
+	assert.equal(jobCompanyFilter.type, 'resourceLocator');
+	assert.equal(jobCompanyFilter.routing.send.type, 'query');
 
 	const routedOperations = node.description.properties.flatMap((property) =>
 		Array.isArray(property.options)
@@ -167,7 +175,7 @@ test('company lookup searches the canonical API and maps selectable results', as
 	assert.equal(response.paginationToken, 'cursor_2');
 });
 
-test('company find rejects an empty search and normalizes ID and website lookups', async () => {
+test('company find rejects an empty search and normalizes ID, website, and name lookups', async () => {
 	const values = { findCompanyId: ' ', findName: ' ', findWebsite: ' ' };
 	const context = {
 		getNode: () => ({ name: 'Cavuno' }),

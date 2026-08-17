@@ -64,7 +64,7 @@ export const jobCreateDescription: INodeProperties[] = [
 	},
 	companyIdSelector(
 		'An existing company on your board. Every job needs a company: choose one here or enter a Company Name (not both).',
-		{ displayOptions: { show: showOnlyForJobCreate }, sendToBody: true },
+		{ displayOptions: { show: showOnlyForJobCreate }, sendTo: 'body' },
 	),
 	{
 		displayName: 'Company Name',

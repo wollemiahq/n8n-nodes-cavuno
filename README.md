@@ -48,6 +48,10 @@ a **Cavuno API** credential in n8n:
     each event family you subscribe to (for example `jobs.read` for job
     events).
 
+**Company → Find** needs only `companies.read` for ID or name lookups. Website
+lookup uses Cavuno's domain matcher and also needs `companies.manage`, as does
+**Find or Create**.
+
 Webhooks and API access are available on paid Cavuno plans. The node always
 uses Cavuno's canonical Operator API at `https://api.cavuno.com/v1`; there is
 no board-specific base URL to enter.

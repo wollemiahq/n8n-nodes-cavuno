@@ -63,7 +63,7 @@ export const jobUpdateDescription: INodeProperties[] = [
 					},
 				},
 			},
-			companyIdSelector('The existing company to move this job to', { sendToBody: true }),
+			companyIdSelector('The existing company to move this job to', { sendTo: 'body' }),
 			...jobOptionalFields,
 		],
 	},

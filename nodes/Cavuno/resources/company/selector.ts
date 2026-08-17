@@ -10,10 +10,10 @@ export function companyIdSelector(
 	options: {
 		displayOptions?: INodeProperties['displayOptions'];
 		required?: boolean;
-		sendToBody?: boolean;
+		sendTo?: 'body' | 'query';
 	} = {},
 ): INodeProperties {
-	const { displayOptions, required = false, sendToBody = false } = options;
+	const { displayOptions, required = false, sendTo } = options;
 
 	return {
 		displayName: 'Company',
@@ -40,11 +40,11 @@ export function companyIdSelector(
 				placeholder: 'com_…',
 			},
 		],
-		...(sendToBody
+		...(sendTo
 			? {
 					routing: {
 						send: {
-							type: 'body' as const,
+							type: sendTo,
 							property: 'companyId',
 						},
 					},
