@@ -357,7 +357,7 @@ export class CavunoTrigger implements INodeType {
 			occurredAt: event.occurred_at,
 			boardId: event.board_id,
 			changedFields: eventData.changed_fields ?? [],
-			object:
+			resource:
 				eventData.object && typeof eventData.object === 'object' && !Array.isArray(eventData.object)
 					? eventData.object
 					: {},

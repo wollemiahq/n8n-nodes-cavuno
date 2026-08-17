@@ -1,4 +1,10 @@
-import type { IExecuteSingleFunctions, IHttpRequestOptions, INodeProperties } from 'n8n-workflow';
+import type {
+	IExecuteSingleFunctions,
+	IHttpRequestOptions,
+	INodeExecutionData,
+	INodeProperties,
+	JsonObject,
+} from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
 const showOnlyForCompanyFind = {
@@ -28,13 +34,53 @@ export async function normalizeCompanyFindBody(
 		return requestOptions;
 	}
 
-	requestOptions.body = {
-		name: name || website,
-		...(website ? { website } : {}),
-		matchByName: Boolean(name),
-		createIfMissing: false,
-	};
+	if (website) {
+		requestOptions.body = {
+			name: name || website,
+			website,
+			matchByName: Boolean(name),
+			createIfMissing: false,
+		};
+		return requestOptions;
+	}
+
+	requestOptions.url = '/companies/search';
+	requestOptions.body = { query: name, limit: 25 };
 	return requestOptions;
+}
+
+export async function normalizeCompanyFindOutput(
+	this: IExecuteSingleFunctions,
+	items: INodeExecutionData[],
+): Promise<INodeExecutionData[]> {
+	const companyId = String(this.getNodeParameter('findCompanyId') ?? '').trim();
+	const website = String(this.getNodeParameter('findWebsite') ?? '').trim();
+	if (companyId) return items;
+
+	if (website) {
+		return items.map((item) => {
+			const company = { ...item.json };
+			delete company.matched;
+			return { ...item, json: company };
+		});
+	}
+
+	const name = String(this.getNodeParameter('findName') ?? '').trim().toLowerCase();
+	const envelope = items[0];
+	const rows = Array.isArray((envelope?.json as { data?: unknown[] } | undefined)?.data)
+		? ((envelope?.json as { data: unknown[] }).data ?? [])
+		: [];
+
+	return rows
+		.filter(
+			(row): row is JsonObject =>
+				typeof row === 'object' &&
+				row !== null &&
+				!Array.isArray(row) &&
+				typeof (row as JsonObject).name === 'string' &&
+				((row as JsonObject).name as string).toLowerCase() === name,
+		)
+		.map((company) => ({ ...envelope, json: company }));
 }
 
 export const companyFindDescription: INodeProperties[] = [

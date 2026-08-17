@@ -7,13 +7,19 @@ import { CAVUNO_API_BASE_URL } from '../../../../shared/api';
 
 export function companyIdSelector(
 	description: string,
-	displayOptions?: INodeProperties['displayOptions'],
-	sendToBody = false,
+	options: {
+		displayOptions?: INodeProperties['displayOptions'];
+		required?: boolean;
+		sendToBody?: boolean;
+	} = {},
 ): INodeProperties {
+	const { displayOptions, required = false, sendToBody = false } = options;
+
 	return {
 		displayName: 'Company',
 		name: 'companyId',
 		type: 'resourceLocator',
+		...(required ? { required: true } : {}),
 		default: { mode: 'list', value: '' },
 		displayOptions,
 		description,
@@ -67,7 +73,13 @@ export async function searchCompanies(
 			'Content-Type': 'application/json',
 		},
 		...(query
-			? { body: { query, limit: 100 } }
+			? {
+					body: {
+						query,
+						limit: 100,
+						...(paginationToken ? { cursor: paginationToken } : {}),
+					},
+				}
 			: { qs: { limit: 100, ...(paginationToken ? { cursor: paginationToken } : {}) } }),
 		json: true,
 	})) as CompanyListResponse;
@@ -82,7 +94,7 @@ export async function searchCompanies(
 				value: company.id,
 				description: company.website ?? undefined,
 			})),
-		...(!query && response.hasMore && response.nextCursor
+		...(response.hasMore && response.nextCursor
 			? { paginationToken: response.nextCursor }
 			: {}),
 	};

@@ -1,6 +1,10 @@
 import type { INodeProperties } from 'n8n-workflow';
 import { companyCreateDescription } from './create';
-import { companyFindDescription, normalizeCompanyFindBody } from './find';
+import {
+	companyFindDescription,
+	normalizeCompanyFindBody,
+	normalizeCompanyFindOutput,
+} from './find';
 import { companyGetAllDescription } from './getAll';
 import { companyIdSelector } from './selector';
 import { companyUpdateDescription } from './update';
@@ -24,7 +28,7 @@ export const companyDescription: INodeProperties[] = [
 				value: 'create',
 				action: 'Create a company',
 				description: 'Create a new company',
-				routing: {
+					routing: {
 					request: {
 						method: 'POST',
 						url: '/companies',
@@ -53,10 +57,13 @@ export const companyDescription: INodeProperties[] = [
 						method: 'POST',
 						url: '/companies/find-or-create',
 					},
-					send: {
-						preSend: [normalizeCompanyFindBody],
+						send: {
+							preSend: [normalizeCompanyFindBody],
+						},
+						output: {
+							postReceive: [normalizeCompanyFindOutput],
+						},
 					},
-				},
 			},
 			{
 				name: 'Find or Create',
@@ -120,9 +127,12 @@ export const companyDescription: INodeProperties[] = [
 		default: 'getAll',
 	},
 	companyIdSelector('The company', {
-		show: {
-			...showOnlyForCompanies,
-			operation: ['get', 'update', 'delete'],
+		required: true,
+		displayOptions: {
+			show: {
+				...showOnlyForCompanies,
+				operation: ['get', 'update', 'delete'],
+			},
 		},
 	}),
 	...companyCreateDescription,

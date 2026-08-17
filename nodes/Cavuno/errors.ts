@@ -50,13 +50,12 @@ export function addCavunoErrorHandling(properties: INodeProperties[]): INodeProp
 
 		for (const option of property.options as INodePropertyOptions[]) {
 			if (!option.routing?.request) continue;
+			const postReceive = option.routing.output?.postReceive ?? [];
+			if (postReceive.includes(throwOnCavunoApiError)) continue;
 
 			option.routing.output = {
 				...option.routing.output,
-				postReceive: [
-					throwOnCavunoApiError,
-					...(option.routing.output?.postReceive ?? []),
-				],
+				postReceive: [throwOnCavunoApiError, ...postReceive],
 			};
 		}
 	}

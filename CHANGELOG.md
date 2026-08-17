@@ -8,7 +8,7 @@
 - Company fields now offer a searchable list with a manual ID mode. **Find a
   company** resolves by Cavuno ID, website, or exact name without creating a
   record.
-- Trigger output adds `occurredAt`, `boardId`, `changedFields`, and `object`
+- Trigger output adds `occurredAt`, `boardId`, `changedFields`, and `resource`
   while preserving the original Cavuno event envelope for existing workflows.
 - Action errors surface Cavuno's structured message; `401` explains rejected
   credentials and `402` adds paid-plan guidance.

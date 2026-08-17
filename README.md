@@ -105,7 +105,7 @@ last one you applied for that resource.
 The trigger output keeps the original Cavuno envelope (`occurred_at`,
 `board_id`, and `data`) for existing workflows and also adds mapping-friendly
 fields: `occurredAt`, `boardId`, `changedFields`, and the resource snapshot as
-`object`.
+`resource`. The top-level `object: "event"` discriminator is unchanged.
 
 ## Compatibility
 

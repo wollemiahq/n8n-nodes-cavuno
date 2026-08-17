@@ -5,7 +5,10 @@ import test from 'node:test';
 import { CavunoApi } from '../dist/credentials/CavunoApi.credentials.js';
 import { Cavuno } from '../dist/nodes/Cavuno/Cavuno.node.js';
 import { throwOnCavunoApiError } from '../dist/nodes/Cavuno/errors.js';
-import { normalizeCompanyFindBody } from '../dist/nodes/Cavuno/resources/company/find.js';
+import {
+	normalizeCompanyFindBody,
+	normalizeCompanyFindOutput,
+} from '../dist/nodes/Cavuno/resources/company/find.js';
 import { searchCompanies } from '../dist/nodes/Cavuno/resources/company/selector.js';
 import { CavunoTrigger } from '../dist/nodes/CavunoTrigger/CavunoTrigger.node.js';
 
@@ -50,6 +53,7 @@ test('action requests use the canonical API and expose company lookup', () => {
 			property.displayOptions?.show?.operation?.includes('create'),
 	);
 	assert.equal(companyRecordSelector.routing, undefined);
+	assert.equal(companyRecordSelector.required, true);
 	assert.equal(jobCreateSelector.routing.send.property, 'companyId');
 
 	const routedOperations = node.description.properties.flatMap((property) =>
@@ -61,6 +65,21 @@ test('action requests use the canonical API and expose company lookup', () => {
 	assert.ok(
 		routedOperations.every((operation) =>
 			operation.routing.output?.postReceive?.includes(throwOnCavunoApiError),
+		),
+	);
+
+	const secondNode = new Cavuno();
+	const secondNodeOperations = secondNode.description.properties.flatMap((property) =>
+		Array.isArray(property.options)
+			? property.options.filter((option) => option.routing?.request)
+			: [],
+	);
+	assert.ok(
+		secondNodeOperations.every(
+			(operation) =>
+				operation.routing.output?.postReceive?.filter(
+					(handler) => handler === throwOnCavunoApiError,
+				).length === 1,
 		),
 	);
 });
@@ -119,12 +138,14 @@ test('company lookup searches the canonical API and maps selectable results', as
 						{ id: 'com_acme', name: 'Acme', website: 'https://acme.example' },
 						{ id: '', name: 'Incomplete' },
 					],
+					hasMore: true,
+					nextCursor: 'cursor_2',
 				};
 			},
 		},
 	};
 
-	const response = await searchCompanies.call(context, ' Acme ');
+	const response = await searchCompanies.call(context, ' Acme ', 'cursor_1');
 
 	assert.deepEqual(requests[0], {
 		method: 'POST',
@@ -133,7 +154,7 @@ test('company lookup searches the canonical API and maps selectable results', as
 			Accept: 'application/json',
 			'Content-Type': 'application/json',
 		},
-		body: { query: 'Acme', limit: 100 },
+		body: { query: 'Acme', limit: 100, cursor: 'cursor_1' },
 		json: true,
 	});
 	assert.deepEqual(response.results, [
@@ -143,6 +164,7 @@ test('company lookup searches the canonical API and maps selectable results', as
 			description: 'https://acme.example',
 		},
 	]);
+	assert.equal(response.paginationToken, 'cursor_2');
 });
 
 test('company find rejects an empty search and normalizes ID and website lookups', async () => {
@@ -177,6 +199,30 @@ test('company find rejects an empty search and normalizes ID and website lookups
 		matchByName: false,
 		createIfMissing: false,
 	});
+
+	values.findWebsite = '';
+	values.findName = ' Acme ';
+	request = await normalizeCompanyFindBody.call(context, {
+		method: 'POST',
+		url: '/companies/find-or-create',
+		body: {},
+	});
+	assert.equal(request.url, '/companies/search');
+	assert.deepEqual(request.body, { query: 'Acme', limit: 25 });
+
+	assert.deepEqual(
+		await normalizeCompanyFindOutput.call(context, [
+			{
+				json: {
+					data: [
+						{ id: 'com_acme', name: 'ACME' },
+						{ id: 'com_other', name: 'Acme Holdings' },
+					],
+				},
+			},
+		]),
+		[{ json: { id: 'com_acme', name: 'ACME' } }],
+	);
 });
 
 test('trigger lifecycle calls the canonical API without a credential base URL', async () => {
@@ -207,6 +253,7 @@ test('trigger output adds friendly fields and keeps the original envelope', asyn
 	const secret = 'whsec_dGVzdA==';
 	const event = {
 		id: 'evt_test',
+		object: 'event',
 		type: 'job.created',
 		occurred_at: '2026-08-17T00:00:00Z',
 		board_id: 'brd_test',
@@ -260,7 +307,8 @@ test('trigger output adds friendly fields and keeps the original envelope', asyn
 	assert.equal(output.occurredAt, event.occurred_at);
 	assert.equal(output.boardId, event.board_id);
 	assert.deepEqual(output.changedFields, event.data.changed_fields);
-	assert.deepEqual(output.object, event.data.object);
+	assert.equal(output.object, 'event');
+	assert.deepEqual(output.resource, event.data.object);
 	assert.deepEqual(output.data, event.data);
 	assert.equal(output.occurred_at, event.occurred_at);
 });
