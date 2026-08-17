@@ -5,6 +5,7 @@ import type {
 	ICredentialType,
 	INodeProperties,
 } from 'n8n-workflow';
+import { CAVUNO_API_BASE_URL } from '../shared/api';
 
 export class CavunoApi implements ICredentialType {
 	name = 'cavunoApi';
@@ -20,16 +21,6 @@ export class CavunoApi implements ICredentialType {
 
 	properties: INodeProperties[] = [
 		{
-			displayName: 'API Base URL',
-			name: 'baseUrl',
-			type: 'string',
-			required: true,
-			default: '',
-			placeholder: 'https://your-board.com/api/v1',
-			description:
-				'Your job board\'s API base URL, ending in /api/v1. Find it in your Cavuno dashboard under Settings → API.',
-		},
-		{
 			displayName: 'API Key',
 			name: 'apiKey',
 			type: 'string',
@@ -37,7 +28,7 @@ export class CavunoApi implements ICredentialType {
 			required: true,
 			default: '',
 			description:
-				'A Cavuno API key (starts with cavuno_live_). Create one in your Cavuno dashboard under Settings → API. Include the jobs.read scope — the connection test uses it. The Cavuno trigger additionally needs the webhooks.read and webhooks.manage scopes plus the read scope of each event family you subscribe to.',
+				'A Cavuno API key (starts with cavuno_live_). Create one under Settings → Developer → API keys. Grant only the scopes your workflows need. The Cavuno trigger needs webhooks.read and webhooks.manage plus the read scope of each event family you subscribe to.',
 		},
 	];
 
@@ -52,10 +43,34 @@ export class CavunoApi implements ICredentialType {
 
 	test: ICredentialTestRequest = {
 		request: {
-			baseURL: '={{$credentials.baseUrl.replace(new RegExp("/+$"), "")}}',
+			baseURL: CAVUNO_API_BASE_URL,
 			url: '/jobs',
 			method: 'GET',
 			qs: { limit: 1 },
+			ignoreHttpStatusErrors: true,
 		},
+		rules: [
+			{
+				type: 'responseCode',
+				properties: {
+					value: 401,
+					message: 'Invalid, expired, or revoked API key',
+				},
+			},
+			{
+				type: 'responseCode',
+				properties: {
+					value: 402,
+					message: 'Cavuno API access needs a paid board plan',
+				},
+			},
+			...([400, 404, 405, 408, 409, 422, 429, 500, 502, 503, 504] as const).map((value) => ({
+				type: 'responseCode' as const,
+				properties: {
+					value,
+					message: `Cavuno connection test failed (${value})`,
+				},
+			})),
+		],
 	};
 }

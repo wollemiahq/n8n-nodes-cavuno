@@ -1,10 +1,19 @@
 import { NodeConnectionTypes, type INodeType, type INodeTypeDescription } from 'n8n-workflow';
 import { candidateDescription } from './resources/candidate';
 import { companyDescription } from './resources/company';
+import { searchCompanies } from './resources/company/selector';
 import { jobDescription } from './resources/job';
 import { marketingPermissionDescription } from './resources/marketingPermission';
+import { CAVUNO_API_BASE_URL } from '../../shared/api';
+import { addCavunoErrorHandling } from './errors';
 
 export class Cavuno implements INodeType {
+	methods = {
+		listSearch: {
+			searchCompanies,
+		},
+	};
+
 	description: INodeTypeDescription = {
 		displayName: 'Cavuno',
 		name: 'cavuno',
@@ -26,13 +35,14 @@ export class Cavuno implements INodeType {
 			},
 		],
 		requestDefaults: {
-			baseURL: '={{$credentials.baseUrl.replace(new RegExp("/+$"), "")}}',
+			baseURL: CAVUNO_API_BASE_URL,
+			ignoreHttpStatusErrors: true,
 			headers: {
 				Accept: 'application/json',
 				'Content-Type': 'application/json',
 			},
 		},
-		properties: [
+		properties: addCavunoErrorHandling([
 			{
 				displayName: 'Resource',
 				name: 'resource',
@@ -62,6 +72,6 @@ export class Cavuno implements INodeType {
 			...companyDescription,
 			...candidateDescription,
 			...marketingPermissionDescription,
-		],
+		]),
 	};
 }
