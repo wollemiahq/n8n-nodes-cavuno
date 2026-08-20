@@ -92,6 +92,11 @@ test('action requests use the canonical API and expose company lookup', () => {
 	);
 });
 
+test('only the action node is eligible for the AI tool picker', () => {
+	assert.equal(new Cavuno().description.usableAsTool, true);
+	assert.equal(new CavunoTrigger().description.usableAsTool, undefined);
+});
+
 test('action errors surface Cavuno messages and explain paid-plan failures', async () => {
 	const parameters = { resource: 'job', operation: 'get' };
 	const context = {
