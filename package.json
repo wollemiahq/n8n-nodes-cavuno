@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-cavuno",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "n8n community node for Cavuno job boards — jobs, companies, candidates, marketing permissions, and signed webhook triggers",
 	"license": "MIT",
 	"homepage": "https://cavuno.com",
