@@ -119,9 +119,6 @@ export class CavunoTrigger implements INodeType {
 		defaults: {
 			name: 'Cavuno Trigger',
 		},
-		// The published-package scanner requires this on every node class; the
-		// editor never offers trigger nodes as AI tools, so it has no effect.
-		usableAsTool: true,
 		inputs: [],
 		outputs: [NodeConnectionTypes.Main],
 		credentials: [
