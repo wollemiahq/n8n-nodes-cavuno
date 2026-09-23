@@ -69,6 +69,30 @@ Withdrawing marketing consent is safe to run more than once. Consent can only
 be given by the person themselves on your board, so this node cannot grant
 it.
 
+**Job → Create** asks for a **Work Arrangement**: On-site, Hybrid, or Remote.
+On-site and hybrid jobs need at least one **Office Location**, entered as
+"City, Country" (for example `Berlin, Germany`) and resolved by Cavuno. Remote
+jobs are open to candidates anywhere. To post a salary, add **Salary** and fill
+in a minimum, a maximum, or both, with the **Currency** (ISO 4217, for example
+`USD`) and **Pay Period**. Cavuno rejects a salary figure without its currency
+and pay period.
+
+### Node versions
+
+The Cavuno node is light-versioned, so saved workflows keep working when its
+parameters change. A workflow stores the node version it was built with, and
+n8n shows that version's fields.
+
+- **1.1** (default for new nodes): Job Create has the required Work
+  Arrangement, Office Locations, and the Salary group described above.
+- **1**: Job Create has a **Fully Remote** toggle and loose salary fields under
+  Additional Fields. Cavuno now requires a work arrangement on every new job,
+  and a currency and pay period with any salary figure. A version 1 node that
+  creates a job without **Fully Remote**, or with a salary but no currency or
+  timeframe, gets a validation error naming the missing field. To fix it,
+  replace the node with a new Cavuno node (version 1.1) and map the same
+  inputs.
+
 Company fields are searchable selectors. Choose **From List** to find a
 company by name, or **By ID** to paste an ID or use an expression. **Company →
 Find** accepts a company ID, website, or exact name without creating a record.
@@ -117,6 +141,7 @@ Requires n8n 1.x or later. No runtime dependencies.
 
 ## Resources
 
+- [Cavuno n8n guide](https://cavuno.com/docs/n8n)
 - [Cavuno API documentation](https://cavuno.com/docs/api)
 - [n8n community nodes documentation](https://docs.n8n.io/integrations/community-nodes/)
 

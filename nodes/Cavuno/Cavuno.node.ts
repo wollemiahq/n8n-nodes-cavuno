@@ -3,6 +3,7 @@ import { candidateDescription } from './resources/candidate';
 import { companyDescription } from './resources/company';
 import { searchCompanies } from './resources/company/selector';
 import { jobDescription } from './resources/job';
+import { WORK_ARRANGEMENT_VERSION } from './resources/job/shared';
 import { marketingPermissionDescription } from './resources/marketingPermission';
 import { CAVUNO_API_BASE_URL } from '../../shared/api';
 import { addCavunoErrorHandling } from './errors';
@@ -19,7 +20,11 @@ export class Cavuno implements INodeType {
 		name: 'cavuno',
 		icon: { light: 'file:cavuno.svg', dark: 'file:cavuno.dark.svg' },
 		group: ['transform'],
-		version: 1,
+		// 1.1: Job Create requires a Work Arrangement (with office locations for
+		// on-site and hybrid) and groups the salary with its currency and pay
+		// period. Saved version 1 workflows keep their original fields.
+		version: [1, WORK_ARRANGEMENT_VERSION],
+		defaultVersion: WORK_ARRANGEMENT_VERSION,
 		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
 		description: 'Manage jobs, companies, candidates, and marketing permissions on a Cavuno job board',
 		defaults: {

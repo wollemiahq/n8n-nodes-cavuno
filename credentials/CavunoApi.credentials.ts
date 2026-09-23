@@ -17,7 +17,7 @@ export class CavunoApi implements ICredentialType {
 		dark: 'file:../nodes/Cavuno/cavuno.dark.svg',
 	};
 
-	documentationUrl = 'https://github.com/wollemiahq/n8n-nodes-cavuno?tab=readme-ov-file#credentials';
+	documentationUrl = 'https://cavuno.com/docs/n8n';
 
 	properties: INodeProperties[] = [
 		{

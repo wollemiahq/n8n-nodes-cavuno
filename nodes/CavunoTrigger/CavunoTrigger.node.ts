@@ -15,6 +15,7 @@ import { CAVUNO_API_BASE_URL } from '../../shared/api';
 const EVENT_TYPE_OPTIONS = [
 	{ name: 'Candidate Created', value: 'candidate.created' },
 	{ name: 'Candidate Deleted', value: 'candidate.deleted' },
+	{ name: 'Candidate Profile Updated', value: 'candidate.profile.updated' },
 	{ name: 'Candidate Updated', value: 'candidate.updated' },
 	{ name: 'Company Created', value: 'company.created' },
 	{ name: 'Company Deleted', value: 'company.deleted' },
