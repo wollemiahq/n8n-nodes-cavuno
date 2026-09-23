@@ -41,6 +41,106 @@ function toEpochMs(value: unknown): number | null {
 }
 
 /**
+ * Node version that added the required Work Arrangement, office locations,
+ * and the grouped Salary on Create. Workflows saved on version 1 keep the
+ * "Fully Remote" toggle and the loose salary fields they were built with.
+ */
+export const WORK_ARRANGEMENT_VERSION = 1.1;
+
+const SALARY_CURRENCY_PATTERN = /^[A-Za-z]{3}$/;
+
+export const salaryTimeframeOptions: INodePropertyOptions[] = [
+	{ name: 'Per Day', value: 'per_day' },
+	{ name: 'Per Hour', value: 'per_hour' },
+	{ name: 'Per Month', value: 'per_month' },
+	{ name: 'Per Week', value: 'per_week' },
+	{ name: 'Per Year', value: 'per_year' },
+];
+const SALARY_TIMEFRAME_VALUES = salaryTimeframeOptions.map(({ value }) => value as string);
+
+export const workArrangementOptions: INodePropertyOptions[] = [
+	{ name: 'Hybrid', value: 'hybrid' },
+	{ name: 'On-Site', value: 'on_site' },
+	{ name: 'Remote', value: 'remote' },
+];
+const WORK_ARRANGEMENT_VALUES = workArrangementOptions.map(({ value }) => value as string);
+
+/**
+ * Create (v1.1+): `remoteOption` comes from Work Arrangement. The API pairs
+ * each value with the data it needs: office locations for on-site and hybrid,
+ * work-authorization permits for remote. A remote role is open to candidates
+ * anywhere, as the v1 "Fully Remote" toggle was; timezones auto-derive.
+ */
+function applyWorkArrangement(this: IExecuteSingleFunctions, body: Record<string, unknown>): void {
+	const arrangement = this.getNodeParameter('workArrangement', '') as string;
+	if (!WORK_ARRANGEMENT_VALUES.includes(arrangement)) {
+		throw new NodeOperationError(
+			this.getNode(),
+			'Choose a Work Arrangement: On-site, Hybrid, or Remote',
+		);
+	}
+	body.remoteOption = arrangement;
+	if (arrangement === 'remote') {
+		body.remotePermits = [{ type: 'worldwide', value: 'worldwide' }];
+		return;
+	}
+	const entries = this.getNodeParameter('officeLocations.location', []) as Array<{
+		query?: unknown;
+	}>;
+	const officeLocations = entries
+		.map((entry) => (typeof entry?.query === 'string' ? entry.query.trim() : ''))
+		.filter((query) => query !== '')
+		.map((query) => ({ query }));
+	if (officeLocations.length === 0) {
+		throw new NodeOperationError(
+			this.getNode(),
+			'On-site and hybrid jobs need at least one Office Location, for example "Berlin, Germany"',
+		);
+	}
+	body.officeLocations = officeLocations;
+}
+
+/**
+ * Create (v1.1+): the Salary group sends a figure only together with its
+ * currency and pay period, which the API requires. A 0 bound means "not set".
+ */
+function applySalary(this: IExecuteSingleFunctions, body: Record<string, unknown>): void {
+	const salary = this.getNodeParameter('salary.range', null) as {
+		salaryMin?: unknown;
+		salaryMax?: unknown;
+		salaryCurrency?: unknown;
+		salaryTimeframe?: unknown;
+	} | null;
+	if (!salary) return;
+	const bound = (value: unknown) =>
+		typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+	const salaryMin = bound(salary.salaryMin);
+	const salaryMax = bound(salary.salaryMax);
+	if (salaryMin === undefined && salaryMax === undefined) {
+		throw new NodeOperationError(
+			this.getNode(),
+			'Salary needs a Minimum or a Maximum above 0. Remove the Salary group to post the job without one.',
+		);
+	}
+	const currency =
+		typeof salary.salaryCurrency === 'string' ? salary.salaryCurrency.trim().toUpperCase() : '';
+	if (!SALARY_CURRENCY_PATTERN.test(currency)) {
+		throw new NodeOperationError(
+			this.getNode(),
+			'Salary Currency must be a three-letter ISO 4217 code, for example USD',
+		);
+	}
+	const timeframe = salary.salaryTimeframe;
+	if (typeof timeframe !== 'string' || !SALARY_TIMEFRAME_VALUES.includes(timeframe)) {
+		throw new NodeOperationError(this.getNode(), 'Choose a Pay Period for the salary');
+	}
+	if (salaryMin !== undefined) body.salaryMin = salaryMin;
+	if (salaryMax !== undefined) body.salaryMax = salaryMax;
+	body.salaryCurrency = currency;
+	body.salaryTimeframe = timeframe;
+}
+
+/**
  * Normalizes the job body before it is sent:
  * - Create requires exactly one of `companyId` | `company`; a company name is
  *   sent as the inline `{ name }` object the API expects.
@@ -86,6 +186,13 @@ export async function normalizeJobBody(
 			throw new NodeOperationError(this.getNode(), 'Expires At is not a valid date');
 		}
 		body.expiresAt = parsed;
+	}
+	if (
+		this.getNodeParameter('operation') === 'create' &&
+		this.getNode().typeVersion >= WORK_ARRANGEMENT_VERSION
+	) {
+		applyWorkArrangement.call(this, body);
+		applySalary.call(this, body);
 	}
 	if (this.getNodeParameter('operation') === 'create') {
 		if (body.companyId && body.company) {
@@ -177,9 +284,10 @@ export const jobOptionalFields: INodeProperties[] = [
 			},
 		},
 	},
-	// Only the "anywhere" remote case is offered. The API pairs a remote
-	// policy with data this node does not model — office locations for
-	// on-site and hybrid roles — so those stay out; normalizeJobBody
+	// Update and version 1 Create offer only the "anywhere" remote case
+	// (version 1.1 Create has Work Arrangement with office locations instead).
+	// The API pairs a remote policy with data these fields do not model —
+	// office locations for on-site and hybrid roles — so normalizeJobBody
 	// expands the toggle above into the permits the API requires.
 	{
 		displayName: 'Salary Currency',
@@ -225,13 +333,7 @@ export const jobOptionalFields: INodeProperties[] = [
 		displayName: 'Salary Timeframe',
 		name: 'salaryTimeframe',
 		type: 'options',
-		options: [
-			{ name: 'Per Day', value: 'per_day' },
-			{ name: 'Per Hour', value: 'per_hour' },
-			{ name: 'Per Month', value: 'per_month' },
-			{ name: 'Per Week', value: 'per_week' },
-			{ name: 'Per Year', value: 'per_year' },
-		],
+		options: salaryTimeframeOptions,
 		default: 'per_year',
 		description: 'The timeframe the salary range refers to',
 		routing: {
@@ -265,6 +367,23 @@ export const jobOptionalFields: INodeProperties[] = [
 		},
 	},
 ];
+
+/**
+ * Fields that v1.1 Create replaces with top-level inputs: Work Arrangement
+ * supersedes the "Fully Remote" toggle, and the Salary group keeps a figure
+ * together with its currency and pay period.
+ */
+const FIELDS_REPLACED_ON_CREATE = new Set([
+	'remote',
+	'salaryCurrency',
+	'salaryMax',
+	'salaryMin',
+	'salaryTimeframe',
+]);
+
+export const jobCreateOptionalFields: INodeProperties[] = jobOptionalFields.filter(
+	({ name }) => !FIELDS_REPLACED_ON_CREATE.has(name),
+);
 
 /**
  * Create-only: the initial status. After creation, use the Publish and

@@ -10,6 +10,7 @@ import {
 	normalizeCompanyFindOutput,
 } from '../dist/nodes/Cavuno/resources/company/find.js';
 import { searchCompanies } from '../dist/nodes/Cavuno/resources/company/selector.js';
+import { normalizeJobBody } from '../dist/nodes/Cavuno/resources/job/shared.js';
 import { CavunoTrigger } from '../dist/nodes/CavunoTrigger/CavunoTrigger.node.js';
 
 const API_BASE_URL = 'https://api.cavuno.com/v1';
@@ -324,4 +325,164 @@ test('trigger output adds friendly fields and keeps the original envelope', asyn
 	assert.deepEqual(output.resource, event.data.object);
 	assert.deepEqual(output.data, event.data);
 	assert.equal(output.occurred_at, event.occurred_at);
+});
+
+function jobCreateContext(typeVersion, parameters) {
+	const values = { resource: 'job', operation: 'create', ...parameters };
+	return {
+		getNode: () => ({ name: 'Cavuno', typeVersion }),
+		getNodeParameter: (name, fallback) => (name in values ? values[name] : fallback),
+	};
+}
+
+const jobCreateBody = () => ({
+	title: 'Engineer',
+	description: 'Build things',
+	applicationUrl: 'https://acme.example/apply',
+	company: 'Acme',
+});
+
+test('job create is light-versioned: 1.1 asks for a work arrangement, 1 keeps its fields', () => {
+	const node = new Cavuno();
+	assert.deepEqual(node.description.version, [1, 1.1]);
+	assert.equal(node.description.defaultVersion, 1.1);
+
+	const createProperties = node.description.properties.filter(
+		(property) =>
+			property.displayOptions?.show?.resource?.includes('job') &&
+			property.displayOptions?.show?.operation?.includes('create'),
+	);
+	const workArrangement = createProperties.find((property) => property.name === 'workArrangement');
+	assert.equal(workArrangement.required, true);
+	assert.deepEqual(workArrangement.options.map(({ value }) => value).sort(), [
+		'hybrid',
+		'on_site',
+		'remote',
+	]);
+	assert.deepEqual(workArrangement.displayOptions.show['@version'], [{ _cnd: { gte: 1.1 } }]);
+	const officeLocations = createProperties.find((property) => property.name === 'officeLocations');
+	assert.deepEqual(officeLocations.displayOptions.show.workArrangement, ['on_site', 'hybrid']);
+
+	const [v1Fields, v11Fields] = createProperties.filter(
+		(property) => property.name === 'additionalFields',
+	);
+	assert.deepEqual(v1Fields.displayOptions.show['@version'], [1]);
+	const names = (collection) => collection.options.map(({ name }) => name);
+	for (const field of ['remote', 'salaryMin', 'salaryCurrency']) {
+		assert.ok(names(v1Fields).includes(field));
+		assert.ok(!names(v11Fields).includes(field));
+	}
+});
+
+test('job create 1.1 sends the work arrangement with the data it needs', async () => {
+	let request = await normalizeJobBody.call(
+		jobCreateContext(1.1, {
+			workArrangement: 'hybrid',
+			'officeLocations.location': [{ query: ' Berlin, Germany ' }, { query: '' }],
+		}),
+		{ body: jobCreateBody() },
+	);
+	assert.equal(request.body.remoteOption, 'hybrid');
+	assert.deepEqual(request.body.officeLocations, [{ query: 'Berlin, Germany' }]);
+	assert.equal(request.body.remotePermits, undefined);
+
+	request = await normalizeJobBody.call(jobCreateContext(1.1, { workArrangement: 'remote' }), {
+		body: jobCreateBody(),
+	});
+	assert.equal(request.body.remoteOption, 'remote');
+	assert.deepEqual(request.body.remotePermits, [{ type: 'worldwide', value: 'worldwide' }]);
+	assert.equal(request.body.officeLocations, undefined);
+
+	await assert.rejects(
+		() =>
+			normalizeJobBody.call(
+				jobCreateContext(1.1, {
+					workArrangement: 'on_site',
+					'officeLocations.location': [{ query: ' ' }],
+				}),
+				{ body: jobCreateBody() },
+			),
+		/need at least one Office Location/,
+	);
+	await assert.rejects(
+		() =>
+			normalizeJobBody.call(jobCreateContext(1.1, { workArrangement: '' }), {
+				body: jobCreateBody(),
+			}),
+		/Choose a Work Arrangement/,
+	);
+});
+
+test('job create 1.1 sends a salary only with its currency and pay period', async () => {
+	const remote = { workArrangement: 'remote' };
+	let request = await normalizeJobBody.call(
+		jobCreateContext(1.1, {
+			...remote,
+			'salary.range': {
+				salaryMin: 90000,
+				salaryMax: 0,
+				salaryCurrency: ' eur ',
+				salaryTimeframe: 'per_year',
+			},
+		}),
+		{ body: jobCreateBody() },
+	);
+	assert.equal(request.body.salaryMin, 90000);
+	assert.equal(request.body.salaryMax, undefined);
+	assert.equal(request.body.salaryCurrency, 'EUR');
+	assert.equal(request.body.salaryTimeframe, 'per_year');
+
+	request = await normalizeJobBody.call(jobCreateContext(1.1, remote), {
+		body: jobCreateBody(),
+	});
+	assert.equal(request.body.salaryMin, undefined);
+	assert.equal(request.body.salaryCurrency, undefined);
+
+	await assert.rejects(
+		() =>
+			normalizeJobBody.call(
+				jobCreateContext(1.1, {
+					...remote,
+					'salary.range': {
+						salaryMax: 120000,
+						salaryCurrency: '',
+						salaryTimeframe: 'per_year',
+					},
+				}),
+				{ body: jobCreateBody() },
+			),
+		/Salary Currency must be a three-letter ISO 4217 code/,
+	);
+	await assert.rejects(
+		() =>
+			normalizeJobBody.call(
+				jobCreateContext(1.1, {
+					...remote,
+					'salary.range': {
+						salaryMin: 0,
+						salaryMax: 0,
+						salaryCurrency: 'USD',
+						salaryTimeframe: 'per_year',
+					},
+				}),
+				{ body: jobCreateBody() },
+			),
+		/Salary needs a Minimum or a Maximum above 0/,
+	);
+});
+
+test('job create 1 keeps the Fully Remote toggle and ignores 1.1 inputs', async () => {
+	let request = await normalizeJobBody.call(jobCreateContext(1, { workArrangement: 'on_site' }), {
+		body: { ...jobCreateBody(), remote: true, salaryMin: 50000 },
+	});
+	assert.equal(request.body.remoteOption, 'remote');
+	assert.deepEqual(request.body.remotePermits, [{ type: 'worldwide', value: 'worldwide' }]);
+	assert.equal(request.body.remote, undefined);
+	assert.equal(request.body.salaryMin, 50000);
+	assert.equal(request.body.officeLocations, undefined);
+
+	request = await normalizeJobBody.call(jobCreateContext(1, {}), {
+		body: jobCreateBody(),
+	});
+	assert.equal(request.body.remoteOption, undefined);
 });
