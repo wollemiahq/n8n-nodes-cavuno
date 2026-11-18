@@ -6,6 +6,7 @@ import type {
 	JsonObject,
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
+import { apiPath } from '../../../../shared/path';
 
 const showOnlyForCompanyFind = {
 	operation: ['find'],
@@ -29,7 +30,7 @@ export async function normalizeCompanyFindBody(
 
 	if (companyId) {
 		requestOptions.method = 'GET';
-		requestOptions.url = `/companies/${encodeURIComponent(companyId)}`;
+		requestOptions.url = apiPath(this, 'companies', companyId);
 		delete requestOptions.body;
 		return requestOptions;
 	}

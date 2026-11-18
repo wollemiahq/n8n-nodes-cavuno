@@ -12,6 +12,7 @@ import {
 import { searchCompanies } from '../dist/nodes/Cavuno/resources/company/selector.js';
 import { normalizeJobBody } from '../dist/nodes/Cavuno/resources/job/shared.js';
 import { CavunoTrigger } from '../dist/nodes/CavunoTrigger/CavunoTrigger.node.js';
+import { apiPath } from '../dist/shared/path.js';
 
 const API_BASE_URL = 'https://api.cavuno.com/v1';
 
@@ -485,4 +486,151 @@ test('job create 1 keeps the Fully Remote toggle and ignores 1.1 inputs', async 
 		body: jobCreateBody(),
 	});
 	assert.equal(request.body.remoteOption, undefined);
+});
+
+const ID_PATH_CASES = [
+	['job_123', 'job_123'],
+	['a/b', 'a%2Fb'],
+	['../jobs/victim?force=true#x', '..%2Fjobs%2Fvictim%3Fforce%3Dtrue%23x'],
+	['%2e%2e', '%252e%252e'],
+	['a\\b', 'a%5Cb'],
+];
+const REJECTED_IDS = ['', ' ', '.', '..', undefined];
+
+test('apiPath encodes each ID as one segment and rejects empty, . and ..', () => {
+	const context = { getNode: () => ({ name: 'Cavuno' }) };
+	for (const [id, encoded] of ID_PATH_CASES) {
+		assert.equal(apiPath(context, 'jobs', id, 'publish'), `/jobs/${encoded}/publish`);
+	}
+	for (const id of REJECTED_IDS) {
+		assert.throws(() => apiPath(context, 'jobs', id), /Enter a valid ID/);
+	}
+});
+
+test('record IDs cannot change the path of an authenticated action request', async () => {
+	const resources = {
+		company: ['companies', 'companyId', ['delete', 'get', 'update']],
+		candidate: ['candidates', 'candidateId', ['delete', 'get']],
+		job: ['jobs', 'jobId', ['delete', 'expire', 'get', 'publish', 'update']],
+		marketingPermission: ['marketing-permissions', 'marketingPermissionId', ['withdraw']],
+	};
+	const actions = ['expire', 'publish', 'withdraw'];
+	const node = new Cavuno();
+	const send = async (operation, parameters) => {
+		const context = {
+			getNode: () => ({ name: 'Cavuno' }),
+			getNodeParameter: (name) => parameters[name],
+		};
+		let options = { ...operation.routing.request, body: {} };
+		for (const hook of operation.routing.send?.preSend ?? []) {
+			options = await hook.call(context, options);
+		}
+		return options;
+	};
+
+	for (const [resource, [collection, parameter, operations]] of Object.entries(resources)) {
+		const property = node.description.properties.find(
+			(entry) =>
+				entry.name === 'operation' && entry.displayOptions?.show?.resource?.includes(resource),
+		);
+		const covered = property.options.filter((option) => operations.includes(option.value));
+		assert.equal(covered.length, operations.length, resource);
+
+		for (const operation of covered) {
+			assert.ok(
+				!operation.routing.request.url.includes('{{'),
+				`${resource}.${operation.value} must not interpolate the ID`,
+			);
+			const suffix = actions.includes(operation.value) ? `/${operation.value}` : '';
+			for (const [id, encoded] of ID_PATH_CASES) {
+				const options = await send(operation, { [parameter]: id });
+				const url = new URL(`${API_BASE_URL}${options.url}`);
+				assert.equal(
+					url.pathname,
+					`/v1/${collection}/${encoded}${suffix}`,
+					`${resource}.${operation.value}: ${id}`,
+				);
+				assert.equal(url.search, '');
+				assert.equal(url.hash, '');
+			}
+			for (const id of REJECTED_IDS) {
+				await assert.rejects(
+					() => send(operation, { [parameter]: id }),
+					/Enter a valid ID/,
+					`${resource}.${operation.value}: ${JSON.stringify(id)}`,
+				);
+			}
+		}
+	}
+
+	// No other action operation builds its URL from an expression.
+	for (const property of node.description.properties) {
+		for (const option of property.options ?? []) {
+			const url = option.routing?.request?.url;
+			if (typeof url === 'string') {
+				assert.ok(!url.includes('{{'), `${option.value}: ${url}`);
+			}
+		}
+	}
+});
+
+test('company find by ID refuses . and .. instead of reaching another route', async () => {
+	for (const id of ['.', '..']) {
+		const values = { findCompanyId: id, findName: '', findWebsite: '' };
+		const context = {
+			getNode: () => ({ name: 'Cavuno' }),
+			getNodeParameter: (name) => values[name],
+		};
+		await assert.rejects(
+			() => normalizeCompanyFindBody.call(context, { body: {} }),
+			/Enter a valid ID/,
+		);
+	}
+});
+
+test('trigger encodes the stored webhook endpoint ID in every request path', async () => {
+	const node = new CavunoTrigger();
+	const requests = [];
+	const staticData = { webhookId: '../jobs/victim', secret: 'whsec_dGVzdA==' };
+	const context = {
+		getNodeWebhookUrl: () => 'https://n8n.example/webhook/cavuno',
+		getNodeParameter: () => ['job.created'],
+		getWorkflowStaticData: () => staticData,
+		getNode: () => ({ name: 'Cavuno Trigger' }),
+		getMode: () => 'trigger',
+		logger: { debug: () => {} },
+		helpers: {
+			httpRequestWithAuthentication: async (_credentialType, options) => {
+				requests.push(options);
+				return { url: 'https://old.example/hook', event_types: [] };
+			},
+		},
+	};
+	const encodedPath = `${API_BASE_URL}/webhook-endpoints/..%2Fjobs%2Fvictim`;
+
+	assert.equal(await node.webhookMethods.default.checkExists.call(context), false);
+	assert.deepEqual(
+		requests.map(({ method, url }) => [method, url]),
+		[
+			['GET', encodedPath],
+			['DELETE', encodedPath],
+		],
+	);
+
+	requests.length = 0;
+	staticData.webhookId = '../jobs/victim';
+	assert.equal(await node.webhookMethods.default.delete.call(context), true);
+	assert.deepEqual(
+		requests.map(({ method, url }) => [method, url]),
+		[['DELETE', encodedPath]],
+	);
+
+	requests.length = 0;
+	staticData.webhookId = '..';
+	staticData.secret = 'whsec_dGVzdA==';
+	await assert.rejects(
+		() => node.webhookMethods.default.checkExists.call(context),
+		/Enter a valid ID/,
+	);
+	assert.equal(requests.length, 0);
 });

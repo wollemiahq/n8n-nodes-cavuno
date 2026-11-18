@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { resourcePath } from '../../../../shared/path';
 import { jobCreateDescription } from './create';
 import { jobGetAllDescription } from './getAll';
 import { normalizeJobBody, sendEmptyJsonBody } from './shared';
@@ -41,7 +42,10 @@ export const jobDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'DELETE',
-						url: '=/jobs/{{$parameter.jobId}}',
+						url: '/jobs',
+					},
+					send: {
+						preSend: [resourcePath('jobs', 'jobId')],
 					},
 				},
 			},
@@ -53,7 +57,10 @@ export const jobDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'POST',
-						url: '=/jobs/{{$parameter.jobId}}/expire',
+						url: '/jobs',
+					},
+					send: {
+						preSend: [resourcePath('jobs', 'jobId', 'expire')],
 					},
 				},
 			},
@@ -65,7 +72,10 @@ export const jobDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'GET',
-						url: '=/jobs/{{$parameter.jobId}}',
+						url: '/jobs',
+					},
+					send: {
+						preSend: [resourcePath('jobs', 'jobId')],
 					},
 				},
 			},
@@ -99,10 +109,10 @@ export const jobDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'POST',
-						url: '=/jobs/{{$parameter.jobId}}/publish',
+						url: '/jobs',
 					},
 					send: {
-						preSend: [sendEmptyJsonBody],
+						preSend: [resourcePath('jobs', 'jobId', 'publish'), sendEmptyJsonBody],
 					},
 				},
 			},
@@ -114,10 +124,10 @@ export const jobDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'PATCH',
-						url: '=/jobs/{{$parameter.jobId}}',
+						url: '/jobs',
 					},
 					send: {
-						preSend: [normalizeJobBody],
+						preSend: [resourcePath('jobs', 'jobId'), normalizeJobBody],
 					},
 				},
 			},

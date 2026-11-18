@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { resourcePath } from '../../../../shared/path';
 import { marketingPermissionGetAllDescription } from './getAll';
 
 const showOnlyForMarketingPermissions = {
@@ -46,7 +47,10 @@ export const marketingPermissionDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'POST',
-						url: '=/marketing-permissions/{{$parameter.marketingPermissionId}}/withdraw',
+						url: '/marketing-permissions',
+					},
+					send: {
+						preSend: [resourcePath('marketing-permissions', 'marketingPermissionId', 'withdraw')],
 					},
 				},
 			},
