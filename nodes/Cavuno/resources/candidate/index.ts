@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { resourcePath } from '../../../../shared/path';
 import { candidateGetAllDescription } from './getAll';
 
 const showOnlyForCandidates = {
@@ -23,7 +24,10 @@ export const candidateDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'DELETE',
-						url: '=/candidates/{{$parameter.candidateId}}',
+						url: '/candidates',
+					},
+					send: {
+						preSend: [resourcePath('candidates', 'candidateId')],
 					},
 				},
 			},
@@ -35,7 +39,10 @@ export const candidateDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'GET',
-						url: '=/candidates/{{$parameter.candidateId}}',
+						url: '/candidates',
+					},
+					send: {
+						preSend: [resourcePath('candidates', 'candidateId')],
 					},
 				},
 			},

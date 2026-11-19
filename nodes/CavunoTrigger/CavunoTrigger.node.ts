@@ -11,6 +11,7 @@ import {
 	type JsonObject,
 } from 'n8n-workflow';
 import { CAVUNO_API_BASE_URL } from '../../shared/api';
+import { apiPath } from '../../shared/path';
 
 const EVENT_TYPE_OPTIONS = [
 	{ name: 'Candidate Created', value: 'candidate.created' },
@@ -157,13 +158,10 @@ export class CavunoTrigger implements INodeType {
 				if (!staticData.webhookId || !staticData.secret) {
 					return false;
 				}
+				const endpointPath = apiPath(this, 'webhook-endpoints', staticData.webhookId);
 				let endpoint;
 				try {
-					endpoint = await cavunoApiRequest.call(
-						this,
-						'GET',
-						`/webhook-endpoints/${staticData.webhookId}`,
-					);
+					endpoint = await cavunoApiRequest.call(this, 'GET', endpointPath);
 				} catch (error) {
 					const { status } = describeRequestError(error);
 					if (status === 404 || status === 410) {
@@ -205,11 +203,7 @@ export class CavunoTrigger implements INodeType {
 				// paused. Retire the stale endpoint instead of orphaning it; a fresh
 				// one is created right after.
 				try {
-					await cavunoApiRequest.call(
-						this,
-						'DELETE',
-						`/webhook-endpoints/${staticData.webhookId}`,
-					);
+					await cavunoApiRequest.call(this, 'DELETE', endpointPath);
 				} catch (error) {
 					this.logger.debug(
 						'Retiring the outdated Cavuno webhook endpoint failed; it may already be removed',
@@ -279,7 +273,7 @@ export class CavunoTrigger implements INodeType {
 						await cavunoApiRequest.call(
 							this,
 							'DELETE',
-							`/webhook-endpoints/${staticData.webhookId}`,
+							apiPath(this, 'webhook-endpoints', staticData.webhookId),
 						);
 					} catch (error) {
 						this.logger.debug(

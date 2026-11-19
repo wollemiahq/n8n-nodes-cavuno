@@ -1,4 +1,5 @@
 import type { INodeProperties } from 'n8n-workflow';
+import { resourcePath } from '../../../../shared/path';
 import { companyCreateDescription } from './create';
 import {
 	companyFindDescription,
@@ -43,7 +44,10 @@ export const companyDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'DELETE',
-						url: '=/companies/{{$parameter.companyId}}',
+						url: '/companies',
+					},
+					send: {
+						preSend: [resourcePath('companies', 'companyId')],
 					},
 				},
 			},
@@ -85,7 +89,10 @@ export const companyDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'GET',
-						url: '=/companies/{{$parameter.companyId}}',
+						url: '/companies',
+					},
+					send: {
+						preSend: [resourcePath('companies', 'companyId')],
 					},
 				},
 			},
@@ -119,7 +126,10 @@ export const companyDescription: INodeProperties[] = [
 				routing: {
 					request: {
 						method: 'PATCH',
-						url: '=/companies/{{$parameter.companyId}}',
+						url: '/companies',
+					},
+					send: {
+						preSend: [resourcePath('companies', 'companyId')],
 					},
 				},
 			},
